@@ -36,9 +36,9 @@ pub extern "C" fn kmain() {
         // STEP 2: Continuously set and clear GPIO 16.
         loop {
             GPIO_SET0.write_volatile(1 << 16);
-            spin_sleep_ms(256);
+            spin_sleep_ms(1000);
             GPIO_CLR0.write_volatile(1 << 16);
-            spin_sleep_ms(256);
+            spin_sleep_ms(1000);
         }
     }
 }
