@@ -51,7 +51,7 @@ states! {
     Uninitialized, Input, Output, Alt
 }
 
-/// A GPIP pin in state `State`.
+/// A GPIO pin in state `State`.
 ///
 /// The `State` generic always corresponds to an uninstantiatable type that is
 /// use solely to mark and track the state of a given GPIO pin. A `Gpio`
@@ -102,17 +102,9 @@ impl Gpio<Uninitialized> {
     /// Enables the alternative function `function` for `self`. Consumes self
     /// and returns a `Gpio` structure in the `Alt` state.
     pub fn into_alt(self, function: Function) -> Gpio<Alt> {
-        let fsel_index = (self.pin / 10) as usize;
-        // Get the appropirate offset for the 
-        // 3 bit slot used for FSEL[self.pin].
-        let offset = (self.pin as usize) - fsel_index * 10;
-        // Payload to ensure `function` is set for that pin in FSEL 
-        let payload = function as u32;
-        // Or with the payload to turn on in memory
-        self.registers.FSEL[fsel_index].or_mask(payload << (3 * offset));
-        // Transition into the Alt state
-        // Don't have to annotate the type as rust can infer 
-        // that from the return type of the function
+        let fsel_idx: usize = self.pin as usize / 10;
+        let offset: usize = ( self.pin as usize - fsel_idx * 10 ) * 3;
+        (*self.registers).FSEL[fsel_idx].or_mask(function as u32 << offset);
         self.transition()
     }
 
@@ -132,22 +124,20 @@ impl Gpio<Uninitialized> {
 impl Gpio<Output> {
     /// Sets (turns on) the pin.
     pub fn set(&mut self) {
-        // Get index of the relevant 32 bits
-        let set_index = (self.pin / 32) as usize;
-        let offset = (self.pin as usize) - (32 * set_index);
-        let payload = 1 as u32;
-        // Turn on bit at offset
-        self.registers.SET[set_index].write(payload << offset);
+        if self.pin < 32 {
+            (*self.registers).SET[0].write(0b1 << self.pin);
+        } else {
+            (*self.registers).SET[1].write(0b1 << (self.pin - 32));
+        }
     }
 
     /// Clears (turns off) the pin.
     pub fn clear(&mut self) {
-        // Get index of the relevant 32 bits
-        let clr_index = (self.pin / 32) as usize;
-        let offset = (self.pin as usize) - (32 * clr_index);
-        let payload = 1 as u32;
-        // turn off bit at offset
-        self.registers.SET[clr_index].write(!(payload << offset));
+        if self.pin < 32 {
+            (*self.registers).CLR[0].write(0b1 << self.pin);
+        } else {
+            (*self.registers).CLR[1].write(0b1 << (self.pin - 32));
+        }
     }
 }
 
@@ -155,14 +145,10 @@ impl Gpio<Input> {
     /// Reads the pin's value. Returns `true` if the level is high and `false`
     /// if the level is low.
     pub fn level(&mut self) -> bool {
-        let level_index = (self.pin / 32) as usize;
-        let offset = (self.pin as usize) - (32 * level_index);
-        let payload = 1 as u32;
-        let value = self.registers.LEV[level_index].read();
-
-        match value & payload {
-            0 => false,
-            _ => true
+        if self.pin < 32 {
+            (*self.registers).LEV[0].has_mask(0b1 << self.pin)
+        } else {
+            (*self.registers).LEV[1].has_mask(0b1 << (self.pin - 32))
         }
     }
 }
